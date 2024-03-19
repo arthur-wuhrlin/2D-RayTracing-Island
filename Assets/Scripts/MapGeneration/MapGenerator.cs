@@ -12,7 +12,8 @@ namespace TerrainGeneration
         [SerializeField] private bool useFalloff;
         [SerializeField] private float islandEffect;
 
-        [SerializeField] private bool useRayTracing;
+        enum DisplayMethod { Basic, CPURayTracing, GPURayTracing };
+        [SerializeField] private DisplayMethod useRayTracing;
         [SerializeField] private float sunAngle;
 
         [SerializeField] private float noiseScale;
@@ -22,6 +23,8 @@ namespace TerrainGeneration
         [SerializeField] [Range(0, 10)] private short octaves;
         [SerializeField] [Range(0f, 2f)] private float gain;
         [SerializeField] [Range(0f, 2f)] private float lacunarity;
+
+        [SerializeField] private ComputeShader rayTraceCompute;
 
         private Noise noise;
 
@@ -35,6 +38,9 @@ namespace TerrainGeneration
         public void Awake()
         {
             RayTracer.SetSunPosition(sunAngle);
+
+            RayTracerCompute.SetSunPosition(sunAngle);
+            RayTracerCompute.SetComputeShader(rayTraceCompute);
         }
 
         public void DrawMapInEditor()
@@ -42,13 +48,20 @@ namespace TerrainGeneration
             MapData mapData = GenerateMapData(Vector2Int.zero);
             MapDisplay display = FindObjectOfType<MapDisplay>();
 
+            Debug.Log(mapData.texture.width);
+            display.DrawTexture(mapData.texture);
+
             if (drawMode == DrawMode.NoiseMap)
             {
                 display.DrawTexture(TextureGenerator.TextureFromHeightMap(mapData.heightMap));
             }
             else if (drawMode == DrawMode.ColourMap)
             {
-                display.DrawTexture(TextureGenerator.TextureFromColourMap(mapData.colourMap, mapSize, mapSize));
+                // Detection of usage of GPU
+                if (mapData.texture != null)
+                    display.DrawTexture(mapData.texture);
+                else
+                    display.DrawTexture(TextureGenerator.TextureFromColourMap(mapData.colourMap, mapSize, mapSize));
             }
             else if (drawMode == DrawMode.FalloffMap)
             {
@@ -88,9 +101,18 @@ namespace TerrainGeneration
 
             MapData mapData = new MapData(noiseMap, colourMap);
 
-            if(useRayTracing)
+            switch(useRayTracing)
             {
-                RayTracer.RayTrace(mapData);
+                case DisplayMethod.Basic:
+                    break;
+                case DisplayMethod.CPURayTracing:
+                    RayTracer.RayTrace(mapData);
+                    break;
+                case DisplayMethod.GPURayTracing:
+                    mapData = RayTracerCompute.RayTrace(mapData);
+                    break;
+                default:
+                    throw new System.NotImplementedException();
             }
 
             return mapData;
@@ -134,13 +156,15 @@ namespace TerrainGeneration
 
     public struct MapData
     {
-        public readonly float[,] heightMap;
-        public readonly Color[] colourMap;
+        public float[,] heightMap;
+        public Color[] colourMap;
+        public Texture2D texture;
 
         public MapData (float[,] heightMap, Color[] colourMap)
         {
             this.heightMap = heightMap;
             this.colourMap = colourMap;
+            this.texture = null;
         }
     }
 }
