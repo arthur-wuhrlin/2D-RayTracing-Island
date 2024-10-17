@@ -48,9 +48,6 @@ namespace TerrainGeneration
             MapData mapData = GenerateMapData(Vector2Int.zero);
             MapDisplay display = FindObjectOfType<MapDisplay>();
 
-            Debug.Log(mapData.texture.width);
-            display.DrawTexture(mapData.texture);
-
             if (drawMode == DrawMode.NoiseMap)
             {
                 display.DrawTexture(TextureGenerator.TextureFromHeightMap(mapData.heightMap));
